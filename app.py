@@ -198,6 +198,16 @@ def view_conversations():
         summary[phone] = len(history) - 1  # minus system prompt
     return jsonify(summary)
 
+
+@app.route("/debug", methods=["GET"])
+def debug():
+    return jsonify({
+        "PHONE_NUMBER_ID": PHONE_NUMBER_ID,
+        "TOKEN_START": ACCESS_TOKEN[:20] + "..." if ACCESS_TOKEN else "MISSING",
+        "VERIFY_TOKEN": VERIFY_TOKEN,
+        "GROQ_KEY": "SET" if GROQ_API_KEY else "MISSING"
+    })
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
     print("Starting MediCare WhatsApp Bot on port " + str(port))
