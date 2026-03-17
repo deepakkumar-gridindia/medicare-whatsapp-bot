@@ -19,8 +19,22 @@ GROQ_API_KEY   = os.getenv("GROQ_API_KEY",   "")
 client = Groq(api_key=GROQ_API_KEY)
 
 # ── In-memory conversation store ─────────────────────────
-# Stores conversation history per phone number
-conversations = {}
+conversations  = {}   # phone → conversation history
+wa_transcripts = {}   # phone → list of transcript lines
+
+def save_wa_transcript(phone, role, message):
+    """Save message to in-memory transcript + file"""
+    clean_phone = phone.replace("+","").replace(" ","")
+    if clean_phone not in wa_transcripts:
+        wa_transcripts[clean_phone] = []
+    line = role + " : " + message
+    wa_transcripts[clean_phone].append(line)
+    # Also save to file
+    try:
+        with open("wa_transcript_" + clean_phone + ".txt", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except:
+        pass
 
 # ── Patient data (simple lookup) ─────────────────────────
 PATIENTS = {
@@ -163,6 +177,8 @@ def receive_message():
 
         patient_text = message["text"]["body"]
         print("Message from " + from_number + ": " + patient_text)
+        # Save patient message to transcript
+        save_wa_transcript(from_number, "Patient", patient_text)
 
         # Check for serious symptoms first
         if check_serious(patient_text):
@@ -180,6 +196,7 @@ def receive_message():
         # Get AI response and send back
         ai_reply = get_ai_response(from_number, patient_text)
         send_whatsapp_message(from_number, ai_reply)
+        save_wa_transcript(from_number, "Agent  ", ai_reply)
 
     except Exception as e:
         print("Error processing message: " + str(e))
@@ -192,11 +209,55 @@ def home():
 
 @app.route("/conversations", methods=["GET"])
 def view_conversations():
-    """Quick view of active conversations"""
     summary = {}
     for phone, history in conversations.items():
-        summary[phone] = len(history) - 1  # minus system prompt
+        summary[phone] = len(history) - 1
     return jsonify(summary)
+
+@app.route("/wa_transcript/<phone>", methods=["GET"])
+def get_wa_transcript(phone):
+    """Dashboard polls this to get live WhatsApp transcript"""
+    lines = wa_transcripts.get(phone, [])
+    # Also try reading from file if not in memory
+    if not lines:
+        try:
+            with open("wa_transcript_" + phone + ".txt", encoding="utf-8") as f:
+                lines = [l.strip() for l in f.readlines() if l.strip()]
+        except:
+            lines = []
+    return jsonify({"phone": phone, "lines": lines, "count": len(lines)})
+
+@app.route("/wa_send", methods=["POST"])
+def send_opening_message():
+    """Dashboard calls this to send opening WhatsApp message"""
+    data        = request.get_json()
+    phone       = data.get("phone","").replace("+","")
+    message     = data.get("message","")
+    patient_ctx = data.get("context","")
+
+    # Store patient context for this conversation
+    if phone not in conversations:
+        conversations[phone] = [
+            {"role": "system", "content": SYSTEM_PROMPT + "\n\nPatient context:\n" + patient_ctx}
+        ]
+
+    # Send via WhatsApp
+    success = send_whatsapp_message(phone, message)
+    if success:
+        save_wa_transcript(phone, "Agent  ", message)
+        return jsonify({"status": "sent", "phone": phone})
+    else:
+        return jsonify({"status": "failed"}), 500
+
+@app.route("/wa_clear/<phone>", methods=["POST"])
+def clear_transcript(phone):
+    """Clear transcript for a phone when new call starts"""
+    wa_transcripts.pop(phone, None)
+    try:
+        os.remove("wa_transcript_" + phone + ".txt")
+    except:
+        pass
+    return jsonify({"status": "cleared"})
 
 
 @app.route("/debug", methods=["GET"])
