@@ -1,0 +1,27 @@
+{
+  "+919741046210": {
+    "name": "Arjun Patel",
+    "age": "67",
+    "phone": "+919741046210",
+    "language": "English",
+    "drugs": [
+      {
+        "drug_name": "Aspirin",
+        "dosage": "75mg",
+        "indication": "Heart Attack",
+        "direction": "Twice daily",
+        "refill_due": "2026-03-22",
+        "prescriber": "Deepshi"
+      },
+      {
+        "drug_name": "Atenolol",
+        "dosage": "50mg",
+        "indication": "Gas",
+        "direction": "Twice daily",
+        "refill_due": "2026-03-22",
+        "prescriber": "Deepshi"
+      }
+    ],
+    "patient_id": "P003"
+  }
+}
