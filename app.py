@@ -189,14 +189,18 @@ def receive_message():
                 "Please stay calm and safe!"
             )
             send_whatsapp_message(from_number, alert_msg)
-            # Clear conversation
+            save_wa_transcript(from_number, "Agent  ", alert_msg + " [ESCALATED]")
             conversations.pop(from_number, None)
             return jsonify({"status": "escalated"}), 200
 
         # Get AI response and send back
-        ai_reply = get_ai_response(from_number, patient_text)
+        ai_reply, is_end = get_ai_response(from_number, patient_text)
         send_whatsapp_message(from_number, ai_reply)
-        save_wa_transcript(from_number, "Agent  ", ai_reply)
+
+        # If END CALL — clear conversation so bot stops responding
+        if is_end:
+            print("Call ended for: " + from_number)
+            conversations.pop(from_number, None)
 
     except Exception as e:
         print("Error processing message: " + str(e))
@@ -241,10 +245,15 @@ def send_opening_message():
             {"role": "system", "content": SYSTEM_PROMPT + "\n\nPatient context:\n" + patient_ctx}
         ]
 
+    # Clean tags from message before sending
+    import re
+    clean_msg = re.sub(r'\[[^\]]*\]', '', message).strip()
+    clean_msg = clean_msg.replace("END CALL","").strip()
+
     # Send via WhatsApp
-    success = send_whatsapp_message(phone, message)
+    success = send_whatsapp_message(phone, clean_msg)
     if success:
-        save_wa_transcript(phone, "Agent  ", message)
+        save_wa_transcript(phone, "Agent  ", clean_msg)
         return jsonify({"status": "sent", "phone": phone})
     else:
         return jsonify({"status": "failed"}), 500
